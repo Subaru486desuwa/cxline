@@ -1,0 +1,1 @@
+{"model":"o3-mini","token_usage":{"used":12500,"total":128000},"cost":{"total":0.42,"currency":"USD"},"elapsed_seconds":323,"permission":"suggest","git_branch":"main","git_dirty":false,"session_id":"abc123"}

@@ -1,0 +1,28 @@
+# cxline default configuration
+# Copy to ~/.config/cxline/config.toml to customize
+
+# Theme: "default", "minimal", or "powerline"
+theme = "default"
+
+# Separator between modules
+separator = " │ "
+
+# Enabled modules (in display order)
+modules = ["model", "tokens", "turns", "cost", "timer", "git", "permission"]
+
+# Token display settings
+[tokens]
+show_bar = true
+bar_width = 10
+
+# Cost display settings
+[cost]
+currency = "USD"   # "USD" or "CNY"
+
+# Custom theme colors (optional)
+# [colors]
+# primary = "cyan"
+# secondary = "white"
+# accent = "green"
+# warning = "yellow"
+# error = "red"

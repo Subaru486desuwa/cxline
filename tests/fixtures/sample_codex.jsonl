@@ -1,0 +1,5 @@
+{"timestamp":"2026-03-04T11:38:17.368Z","type":"session_meta","payload":{"id":"test-session-001","timestamp":"2026-03-04T11:37:55.863Z","cwd":"/Users/test/project","originator":"codex_cli_rs","cli_version":"0.104.0","source":"cli","model_provider":"openai"}}
+{"timestamp":"2026-03-04T11:38:17.376Z","type":"turn_context","payload":{"turn_id":"turn-001","cwd":"/Users/test/project","approval_policy":"on-request","model":"gpt-5.3-codex","personality":"pragmatic"}}
+{"timestamp":"2026-03-04T11:38:17.370Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-001","model_context_window":258400,"collaboration_mode_kind":"default"}}
+{"timestamp":"2026-03-04T11:38:36.959Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10259,"cached_input_tokens":4096,"output_tokens":836,"reasoning_output_tokens":622,"total_tokens":11095},"model_context_window":258400},"rate_limits":{}}}
+{"timestamp":"2026-03-04T11:38:36.960Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-001","last_agent_message":"Done."}}
