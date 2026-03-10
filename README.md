@@ -1,8 +1,10 @@
 # cxline
 
+[中文文档](README_CN.md)
+
 A lightweight, blazing-fast session monitor for [OpenAI Codex CLI](https://github.com/openai/codex).
 
-Reads Codex session logs (`~/.codex/sessions/`) and displays a real-time status bar in your tmux bottom bar — model, tokens, turns, timer, permission, all auto-updating.
+After install, just type `codex` as usual — a real-time status bar auto-appears at the bottom of your terminal.
 
 ```
 🤖 gpt-5.3-codex │ 📊 11.1k/258.4k ░░░░░░░░░░ 10.3kin (4.1kcached) 836out 622reason │ 🔄 Turn 3 │ ⏱️  2m15s │ 🔒 on-request
@@ -20,16 +22,9 @@ cd cxline
 1. Checks/installs tmux
 2. `cargo install` builds the binary
 3. Configures `~/.tmux.conf` for the status bar
-4. Adds `cx` alias to your `~/.zshrc` (or `~/.bashrc`)
+4. Wraps `codex` in your shell rc so tmux auto-launches
 
-## Usage
-
-```bash
-cx        # start tmux with cxline status bar
-codex     # use Codex as usual, bottom bar auto-updates
-```
-
-That's it. The tmux bottom bar refreshes every 2 seconds with the latest Codex session data.
+**Open a new terminal, type `codex` — done.**
 
 ## What it shows
 
@@ -47,10 +42,10 @@ That's it. The tmux bottom bar refreshes every 2 seconds with the latest Codex s
 ## Other commands
 
 ```bash
-cxline show                             # one-shot summary of latest session
-cxline show -s path/to/rollout.jsonl    # summary of specific session
-cxline watch                            # live watch mode (standalone terminal)
-echo '{"model":"o3"}' | cxline          # legacy stdin pipe mode
+cxline show                             # One-shot summary of latest session
+cxline show -s path/to/rollout.jsonl    # Summary of specific session
+cxline watch                            # Live watch mode (standalone terminal)
+echo '{"model":"o3"}' | cxline          # Legacy stdin pipe mode
 ```
 
 ## Configuration
@@ -72,16 +67,15 @@ currency = "USD"            # USD / CNY
 
 ## Themes
 
-```bash
-cxline show --theme minimal      # plain text, no icons
-cxline show --theme powerline    # nerd font icons
-```
+- **default** — Emoji icons, modern terminals
+- **minimal** — Plain text, no icons
+- **powerline** — Nerd Font icons + Powerline separators
 
 ## Requirements
 
 - Rust (cargo)
 - tmux
-- macOS / Linux / Windows (cross-platform)
+- macOS / Linux / Windows
 
 ## License
 

@@ -9,7 +9,7 @@ if ! command -v cargo &>/dev/null; then
     exit 1
 fi
 
-# Check tmux, install if missing (macOS)
+# Check tmux, install if missing
 if ! command -v tmux &>/dev/null; then
     echo "==> tmux not found, installing..."
     if command -v brew &>/dev/null; then
@@ -28,9 +28,9 @@ fi
 echo "==> Building cxline (release)..."
 cargo install --path . --force
 
-# Run setup (writes tmux.conf + shell alias)
+# Run setup (writes tmux.conf + codex wrapper)
 echo "==> Configuring..."
 cxline setup
 
 echo ""
-echo "Done! Open a new terminal and type 'cx' to start."
+echo "Done! Open a new terminal, type 'codex' as usual — status bar auto-appears."

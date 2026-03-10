@@ -116,7 +116,7 @@ fn run_setup() {
         .unwrap_or_else(|_| "cxline".to_string());
 
     let home = dirs::home_dir().expect("Cannot determine home directory");
-    let mut changes = Vec::new();
+    let mut changes: Vec<String> = Vec::new();
 
     // --- 1. Write ~/.tmux.conf ---
     let tmux_conf = home.join(".tmux.conf");
@@ -163,7 +163,7 @@ set -g status-position bottom
             new_content.push_str(&tmux_block);
             new_content.push('\n');
             std::fs::write(&tmux_conf, new_content).expect("Failed to write ~/.tmux.conf");
-            changes.push("~/.tmux.conf (updated cxline block)");
+            changes.push("~/.tmux.conf (updated cxline block)".into());
         } else {
             // Append
             let mut content = content;
@@ -174,18 +174,32 @@ set -g status-position bottom
             content.push_str(&tmux_block);
             content.push('\n');
             std::fs::write(&tmux_conf, content).expect("Failed to write ~/.tmux.conf");
-            changes.push("~/.tmux.conf (appended cxline config)");
+            changes.push("~/.tmux.conf (appended cxline config)".into());
         }
     } else {
         std::fs::write(&tmux_conf, format!("{}\n", tmux_block))
             .expect("Failed to create ~/.tmux.conf");
-        changes.push("~/.tmux.conf (created)");
+        changes.push("~/.tmux.conf (created)".into());
     }
 
-    // --- 2. Add alias to shell rc ---
-    let alias_line = r#"alias cx='tmux new-session -A -s codex'"#;
-    let alias_marker = "# cxline: codex+tmux shortcut";
-    let alias_block = format!("{}\n{}", alias_marker, alias_line);
+    // --- 2. Add codex wrapper function to shell rc ---
+    let func_marker = "# cxline-codex-wrapper";
+    let func_marker_end = "# cxline-codex-wrapper-end";
+    // Shell function: if not in tmux, launch tmux and run codex inside;
+    // if already in tmux, just run codex directly.
+    let func_block = format!(
+        r#"{marker}
+codex() {{
+  if [ -z "$TMUX" ]; then
+    tmux new-session -A -s codex "command codex $*"
+  else
+    command codex "$@"
+  fi
+}}
+{marker_end}"#,
+        marker = func_marker,
+        marker_end = func_marker_end,
+    );
 
     // Detect shell rc file
     let shell = std::env::var("SHELL").unwrap_or_default();
@@ -195,40 +209,73 @@ set -g status-position bottom
         home.join(".bashrc")
     };
 
+    let rc_name = if shell.contains("zsh") { "~/.zshrc" } else { "~/.bashrc" };
+
     if rc_file.exists() {
         let content = std::fs::read_to_string(&rc_file).unwrap_or_default();
-        if !content.contains(alias_line) {
+        if content.contains(func_marker) {
+            // Replace existing block
+            let mut new_content = String::new();
+            let mut skipping = false;
+            for line in content.lines() {
+                if line.trim() == func_marker {
+                    skipping = true;
+                    continue;
+                }
+                if line.trim() == func_marker_end {
+                    skipping = false;
+                    continue;
+                }
+                if !skipping {
+                    new_content.push_str(line);
+                    new_content.push('\n');
+                }
+            }
+            new_content.push_str(&func_block);
+            new_content.push('\n');
+            std::fs::write(&rc_file, new_content)
+                .unwrap_or_else(|_| panic!("Failed to write {}", rc_file.display()));
+            changes.push(format!("{} (updated codex wrapper)", rc_name));
+        } else {
+            // Append
             let mut content = content;
             if !content.ends_with('\n') {
                 content.push('\n');
             }
             content.push('\n');
-            content.push_str(&alias_block);
+            content.push_str(&func_block);
             content.push('\n');
             std::fs::write(&rc_file, content)
                 .unwrap_or_else(|_| panic!("Failed to write {}", rc_file.display()));
-            changes.push(if shell.contains("zsh") {
-                "~/.zshrc (added cx alias)"
-            } else {
-                "~/.bashrc (added cx alias)"
-            });
+            changes.push(format!("{} (added codex wrapper)", rc_name));
         }
     } else {
-        std::fs::write(&rc_file, format!("{}\n", alias_block))
+        std::fs::write(&rc_file, format!("{}\n", func_block))
             .unwrap_or_else(|_| panic!("Failed to create {}", rc_file.display()));
-        changes.push(if shell.contains("zsh") {
-            "~/.zshrc (created with cx alias)"
-        } else {
-            "~/.bashrc (created with cx alias)"
-        });
+        changes.push(format!("{} (created with codex wrapper)", rc_name));
     }
 
-    // --- 3. If inside tmux, apply immediately ---
+    // --- 3. Remove old cx alias if present ---
+    if rc_file.exists() {
+        let content = std::fs::read_to_string(&rc_file).unwrap_or_default();
+        if content.contains("alias cx='tmux new-session") {
+            let new_content: String = content
+                .lines()
+                .filter(|l| !l.contains("alias cx='tmux new-session") && l.trim() != "# cxline: codex+tmux shortcut")
+                .collect::<Vec<_>>()
+                .join("\n");
+            std::fs::write(&rc_file, format!("{}\n", new_content))
+                .unwrap_or_else(|_| panic!("Failed to write {}", rc_file.display()));
+            changes.push(format!("{} (removed old cx alias)", rc_name));
+        }
+    }
+
+    // --- 4. If inside tmux, apply immediately ---
     if std::env::var("TMUX").is_ok() {
         let _ = std::process::Command::new("tmux")
             .args(["source-file", &tmux_conf.display().to_string()])
             .output();
-        changes.push("tmux config reloaded (live)");
+        changes.push("tmux config reloaded (live)".to_string());
     }
 
     // --- Output ---
@@ -238,9 +285,7 @@ set -g status-position bottom
         println!("  [+] {}", c);
     }
     println!();
-    println!("Usage:");
-    println!("  cx        - Start tmux + cxline status bar at bottom");
-    println!("  codex     - Run Codex as usual, status bar auto-updates");
+    println!("Usage: just type 'codex' as usual, status bar auto-appears at bottom.");
     println!();
     if std::env::var("TMUX").is_err() {
         println!("Run `source {}` or open a new terminal to activate.", rc_file.display());
@@ -271,9 +316,7 @@ MODULES:
     model, tokens, cost, timer, git, permission, turns
 
 EXAMPLES:
-    cxline setup                          # One-click install
-    cx                                    # Start tmux with cxline
-    cxline watch                          # Watch latest Codex session
+    cxline setup                          # One-click setup, then just use 'codex'
     cxline show                           # Show latest session summary
     echo '{{"model":"o3-mini"}}' | cxline   # Legacy stdin mode"#
     );
