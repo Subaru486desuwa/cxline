@@ -8,7 +8,17 @@
 🤖 gpt-5.3-codex │ 📊 11.1k/258.4k ░░░░░░░░░░ 10.3kin (4.1kcached) 836out 622reason │ 🔄 Turn 3 │ ⏱️  2m15s │ 🔒 on-request
 ```
 
+## 平台支持
+
+| 平台 | 状态显示方式 | 依赖 |
+|------|-------------|------|
+| **macOS** | tmux 底部状态栏 | tmux |
+| **Linux** | tmux 底部状态栏 | tmux |
+| **Windows** | 终端标题栏 | PowerShell |
+
 ## 安装
+
+### macOS / Linux
 
 ```bash
 git clone https://github.com/Subaru486desuwa/cxline.git
@@ -24,7 +34,25 @@ cd cxline
 
 安装完成后，**新开终端，像平时一样输入 `codex` 就行**，底部状态栏自动出现。
 
+### Windows
+
+```powershell
+git clone https://github.com/Subaru486desuwa/cxline.git
+cd cxline
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+脚本自动完成：
+1. 编译安装 cxline
+2. 在 PowerShell 配置文件中注入 `codex` 包装函数
+
+安装完成后，**重启 PowerShell，输入 `codex`**，状态信息自动显示在终端标题栏。
+
+> Windows 没有 tmux，因此 cxline 使用终端标题栏来显示状态。你也可以手动使用这个模式：`cxline watch --title`
+
 ## 工作原理
+
+**macOS / Linux（tmux 模式）：**
 
 ```
 用户输入 codex
@@ -36,6 +64,20 @@ tmux 底部状态栏每 2 秒调用 cxline show
 cxline 读取 ~/.codex/sessions/ 下最新的 JSONL 日志
     ↓
 解析并渲染：模型 │ Token │ 轮次 │ 耗时 │ 权限
+```
+
+**Windows（标题栏模式）：**
+
+```
+用户输入 codex
+    ↓
+PowerShell 函数后台启动 cxline watch --title
+    ↓
+cxline 实时监视 ~/.codex/sessions/*.jsonl
+    ↓
+通过 OSC 转义序列将状态写入终端标题栏
+    ↓
+codex 退出时自动清理后台进程
 ```
 
 ## 显示内容
@@ -51,12 +93,14 @@ cxline 读取 ~/.codex/sessions/ 下最新的 JSONL 日志
 | `git` | `🌿 main` | Git 分支 |
 | `permission` | `🔒 on-request` | 审批策略 |
 
-## 其他命令
+## 命令一览
 
 ```bash
+cxline setup                            # 一键配置（自动检测平台）
 cxline show                             # 显示最近一次会话摘要
 cxline show -s path/to/rollout.jsonl    # 显示指定会话
-cxline watch                            # 独立终端实时监控模式
+cxline watch                            # 独立终端实时监控（stdout 输出，用于 tmux）
+cxline watch --title                    # 实时监控写入标题栏（用于 Windows）
 echo '{"model":"o3"}' | cxline          # 管道输入模式（兼容旧版）
 ```
 
@@ -91,12 +135,14 @@ currency = "CNY"            # USD / CNY
 cargo uninstall cxline
 ```
 
-然后删除 `~/.tmux.conf` 中 `# cxline-managed` 到 `# cxline-managed-end` 之间的内容，以及 `~/.zshrc` 中 `# cxline-codex-wrapper` 到 `# cxline-codex-wrapper-end` 之间的内容。
+然后删除注入的配置块：
+- **macOS / Linux**：删除 `~/.tmux.conf` 中 `# cxline-managed` 到 `# cxline-managed-end` 之间的内容，以及 `~/.zshrc`（或 `~/.bashrc`）中 `# cxline-codex-wrapper` 到 `# cxline-codex-wrapper-end` 之间的内容
+- **Windows**：删除 PowerShell 配置文件（`$PROFILE`）中 `# cxline-codex-wrapper` 到 `# cxline-codex-wrapper-end` 之间的内容
 
 ## 环境要求
 
-- Rust (cargo)
-- tmux
+- [Rust](https://rustup.rs/) (cargo)
+- tmux（仅 macOS / Linux）
 - macOS / Linux / Windows
 
 ## License
