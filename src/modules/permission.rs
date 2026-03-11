@@ -13,15 +13,37 @@ impl Module for PermissionModule {
     fn render(&self, data: &SessionData, theme: &Theme) -> Option<String> {
         let perm = data.permission.as_ref()?;
 
-        let color = match perm.as_str() {
-            "full-auto" | "auto" => &theme.colors.error,
-            "suggest" | "ask" => &theme.colors.accent,
-            _ => &theme.colors.warning,
+        let (icon, color) = match perm.as_str() {
+            "full-auto" | "auto" => {
+                let ic = match theme.name.as_str() {
+                    "minimal" => "",
+                    "powerline" => "\u{f09c} ",  // nf-fa-unlock
+                    _ => "\u{1f513} ",            // 🔓
+                };
+                (ic, &theme.colors.error)
+            }
+            "suggest" | "ask" => {
+                let ic = match theme.name.as_str() {
+                    "minimal" => "",
+                    "powerline" => "\u{f00c} ",  // nf-fa-check
+                    _ => "\u{2705} ",             // ✅
+                };
+                (ic, &theme.colors.accent)
+            }
+            _ => {
+                // on-request and others → locked
+                let ic = match theme.name.as_str() {
+                    "minimal" => "",
+                    "powerline" => "\u{f023} ",  // nf-fa-lock
+                    _ => "\u{1f512} ",            // 🔒
+                };
+                (ic, &theme.colors.warning)
+            }
         };
 
         Some(format!(
             "{}{}",
-            theme.icons.permission,
+            icon,
             apply_color(perm, color)
         ))
     }

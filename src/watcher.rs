@@ -137,7 +137,6 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config, title_mode: 
 
         file.seek(std::io::SeekFrom::Start(pos))?;
         reader = io::BufReader::new(&file);
-        let mut changed = false;
 
         line_buf.clear();
         while reader.read_line(&mut line_buf)? > 0 {
@@ -145,7 +144,6 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config, title_mode: 
             if !trimmed.is_empty() {
                 if let Some(event) = parser::parse_codex_line(trimmed) {
                     session.apply_event(&event);
-                    changed = true;
                 }
             }
             line_buf.clear();
@@ -153,9 +151,8 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config, title_mode: 
 
         pos = file_len;
 
-        if changed {
-            render_status(&session, &mods, &theme, title_mode);
-        }
+        // Always re-render: timer updates even when no new events arrive
+        render_status(&session, &mods, &theme, title_mode);
     }
 }
 

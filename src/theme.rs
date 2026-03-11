@@ -25,7 +25,6 @@ pub struct ThemeIcons {
     pub cost: &'static str,
     pub timer: &'static str,
     pub git: &'static str,
-    pub permission: &'static str,
     pub turns: &'static str,
 }
 
@@ -47,7 +46,6 @@ const ICONS_DEFAULT: ThemeIcons = ThemeIcons {
     cost: "\u{1f4b0} ",
     timer: "\u{23f1}\u{fe0f}  ",
     git: "\u{1f33f} ",
-    permission: "\u{1f512} ",
     turns: "\u{1f504} ",
 };
 
@@ -57,7 +55,6 @@ const ICONS_MINIMAL: ThemeIcons = ThemeIcons {
     cost: "$",
     timer: "",
     git: "",
-    permission: "",
     turns: "",
 };
 
@@ -67,7 +64,6 @@ const ICONS_POWERLINE: ThemeIcons = ThemeIcons {
     cost: "\u{f155} ",    // nf-fa-dollar
     timer: "\u{f017} ",   // nf-fa-clock_o
     git: "\u{e725} ",     // nf-dev-git_branch
-    permission: "\u{f023} ", // nf-fa-lock
     turns: "\u{f01e} ",   // nf-fa-refresh
 };
 
