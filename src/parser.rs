@@ -1,5 +1,50 @@
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Parse ISO 8601 timestamp (e.g. "2026-03-04T11:38:17.368Z") to Unix epoch seconds.
+/// Only supports the fixed format `YYYY-MM-DDThh:mm:ss.sssZ` (UTC).
+fn parse_iso8601_to_epoch_secs(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if s.len() < 20 || !s.ends_with('Z') {
+        return None;
+    }
+    let year: i64 = s.get(0..4)?.parse().ok()?;
+    let month: u32 = s.get(5..7)?.parse().ok()?;
+    let day: u32 = s.get(8..10)?.parse().ok()?;
+    let hour: u32 = s.get(11..13)?.parse().ok()?;
+    let min: u32 = s.get(14..16)?.parse().ok()?;
+    let sec: u32 = s.get(17..19)?.parse().ok()?;
+    let frac: f64 = if s.len() > 20 {
+        s.get(19..s.len() - 1)?.parse().ok()?
+    } else {
+        0.0
+    };
+
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+
+    // Days from year 1970 to this year
+    let mut days: i64 = 0;
+    for y in 1970..year {
+        days += if is_leap(y) { 366 } else { 365 };
+    }
+    let month_days = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for m in 1..month {
+        days += month_days[m as usize] as i64;
+        if m == 2 && is_leap(year) {
+            days += 1;
+        }
+    }
+    days += (day - 1) as i64;
+
+    Some(days as f64 * 86400.0 + hour as f64 * 3600.0 + min as f64 * 60.0 + sec as f64 + frac)
+}
+
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
 
 #[derive(Debug, Deserialize, Default)]
 #[allow(dead_code)]
@@ -65,6 +110,7 @@ pub enum CodexEvent {
         cwd: Option<String>,
         cli_version: Option<String>,
         model_provider: Option<String>,
+        timestamp: Option<f64>,
     },
     TurnContext {
         turn_id: String,
@@ -81,11 +127,13 @@ pub enum CodexEvent {
         cached_input_tokens: Option<u64>,
         output_tokens: Option<u64>,
         reasoning_output_tokens: Option<u64>,
+        total_tokens: Option<u64>,
         model_context_window: Option<u64>,
     },
     TaskComplete {
         #[allow(dead_code)]
         turn_id: String,
+        timestamp: Option<f64>,
     },
     Unknown,
 }
@@ -96,12 +144,20 @@ pub fn parse_codex_line(line: &str) -> Option<CodexEvent> {
     let p = &raw.payload;
 
     match raw.event_type.as_str() {
-        "session_meta" => Some(CodexEvent::SessionMeta {
-            id: p.get("id")?.as_str()?.to_string(),
-            cwd: p.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            cli_version: p.get("cli_version").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            model_provider: p.get("model_provider").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        }),
+        "session_meta" => {
+            // Prefer payload.timestamp (session creation time), fallback to outer raw.timestamp
+            let ts = p.get("timestamp")
+                .and_then(|v| v.as_str())
+                .or(raw.timestamp.as_deref())
+                .and_then(parse_iso8601_to_epoch_secs);
+            Some(CodexEvent::SessionMeta {
+                id: p.get("id")?.as_str()?.to_string(),
+                cwd: p.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                cli_version: p.get("cli_version").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                model_provider: p.get("model_provider").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                timestamp: ts,
+            })
+        }
         "turn_context" => Some(CodexEvent::TurnContext {
             turn_id: p.get("turn_id")?.as_str()?.to_string(),
             model: p.get("model").and_then(|v| v.as_str()).map(|s| s.to_string()),
@@ -117,18 +173,25 @@ pub fn parse_codex_line(line: &str) -> Option<CodexEvent> {
                 }),
                 "token_count" => {
                     let info = p.get("info");
+                    // last_token_usage = current-turn context window usage (comparable to model_context_window)
+                    // total_token_usage = cumulative across session (NOT comparable to model_context_window)
+                    // Prefer last; fallback to total for backward compat with older logs.
+                    let last_usage = info.and_then(|i| i.get("last_token_usage"));
                     let total_usage = info.and_then(|i| i.get("total_token_usage"));
+                    let usage = last_usage.or(total_usage);
                     let ctx_window = info.and_then(|i| i.get("model_context_window")).and_then(|v| v.as_u64());
                     Some(CodexEvent::TokenCount {
-                        input_tokens: total_usage.and_then(|u| u.get("input_tokens")).and_then(|v| v.as_u64()),
-                        cached_input_tokens: total_usage.and_then(|u| u.get("cached_input_tokens")).and_then(|v| v.as_u64()),
-                        output_tokens: total_usage.and_then(|u| u.get("output_tokens")).and_then(|v| v.as_u64()),
-                        reasoning_output_tokens: total_usage.and_then(|u| u.get("reasoning_output_tokens")).and_then(|v| v.as_u64()),
+                        input_tokens: usage.and_then(|u| u.get("input_tokens")).and_then(|v| v.as_u64()),
+                        cached_input_tokens: usage.and_then(|u| u.get("cached_input_tokens")).and_then(|v| v.as_u64()),
+                        output_tokens: usage.and_then(|u| u.get("output_tokens")).and_then(|v| v.as_u64()),
+                        reasoning_output_tokens: usage.and_then(|u| u.get("reasoning_output_tokens")).and_then(|v| v.as_u64()),
+                        total_tokens: usage.and_then(|u| u.get("total_tokens")).and_then(|v| v.as_u64()),
                         model_context_window: ctx_window,
                     })
                 }
                 "task_complete" => Some(CodexEvent::TaskComplete {
                     turn_id: p.get("turn_id")?.as_str()?.to_string(),
+                    timestamp: raw.timestamp.as_deref().and_then(parse_iso8601_to_epoch_secs),
                 }),
                 _ => Some(CodexEvent::Unknown),
             }
@@ -151,27 +214,27 @@ pub struct CodexSession {
     pub cached_input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub reasoning_output_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
     pub turn_count: u32,
-    pub start_time: Option<std::time::Instant>,
+    pub session_start_epoch: Option<f64>,
+    pub session_end_epoch: Option<f64>,
     seen_turn_ids: Vec<String>,
 }
 
 impl CodexSession {
     pub fn new() -> Self {
-        Self {
-            start_time: Some(std::time::Instant::now()),
-            ..Default::default()
-        }
+        Self::default()
     }
 
     /// Apply a single event to update session state
     pub fn apply_event(&mut self, event: &CodexEvent) {
         match event {
-            CodexEvent::SessionMeta { id, cwd, cli_version, model_provider } => {
+            CodexEvent::SessionMeta { id, cwd, cli_version, model_provider, timestamp } => {
                 self.session_id = Some(id.clone());
                 if cwd.is_some() { self.cwd = cwd.clone(); }
                 if cli_version.is_some() { self.cli_version = cli_version.clone(); }
                 if model_provider.is_some() { self.model_provider = model_provider.clone(); }
+                if let Some(ts) = timestamp { self.session_start_epoch = Some(*ts); }
             }
             CodexEvent::TurnContext { turn_id, model, approval_policy, cwd } => {
                 if model.is_some() { self.model = model.clone(); }
@@ -193,31 +256,36 @@ impl CodexSession {
             }
             CodexEvent::TokenCount {
                 input_tokens, cached_input_tokens, output_tokens,
-                reasoning_output_tokens, model_context_window,
+                reasoning_output_tokens, total_tokens, model_context_window,
             } => {
                 if input_tokens.is_some() { self.input_tokens = *input_tokens; }
                 if cached_input_tokens.is_some() { self.cached_input_tokens = *cached_input_tokens; }
                 if output_tokens.is_some() { self.output_tokens = *output_tokens; }
                 if reasoning_output_tokens.is_some() { self.reasoning_output_tokens = *reasoning_output_tokens; }
+                if total_tokens.is_some() { self.total_tokens = *total_tokens; }
                 if let Some(w) = model_context_window {
                     self.model_context_window = Some(*w);
                 }
             }
-            CodexEvent::TaskComplete { .. } => {}
+            CodexEvent::TaskComplete { timestamp, .. } => {
+                if let Some(ts) = timestamp {
+                    self.session_end_epoch = Some(*ts);
+                }
+            }
             CodexEvent::Unknown => {}
         }
     }
 
     /// Convert to SessionData for rendering via existing modules
     pub fn to_session_data(&self) -> SessionData {
-        let total_used = [
-            self.input_tokens,
-            self.output_tokens,
-            self.reasoning_output_tokens,
-        ]
-        .iter()
-        .filter_map(|v| *v)
-        .sum::<u64>();
+        // total_tokens = input_tokens + output_tokens
+        // (cached ⊂ input, reasoning ⊂ output — do NOT add subsets again)
+        let total_used = self.total_tokens.unwrap_or_else(|| {
+            [self.input_tokens, self.output_tokens]
+                .iter()
+                .filter_map(|v| *v)
+                .sum()
+        });
 
         let token_usage = if total_used > 0 || self.model_context_window.is_some() {
             Some(TokenUsage {
@@ -232,7 +300,12 @@ impl CodexSession {
             None
         };
 
-        let elapsed = self.start_time.map(|t| t.elapsed().as_secs_f64());
+        let elapsed = self.session_start_epoch.map(|start| {
+            let end = self.session_end_epoch.unwrap_or_else(|| {
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64()
+            });
+            (end - start).max(0.0)
+        });
 
         SessionData {
             model: self.model.clone(),
@@ -293,28 +366,71 @@ mod tests {
 
     #[test]
     fn test_parse_codex_session_meta() {
-        let line = r#"{"timestamp":"2026-03-04T11:38:17.368Z","type":"session_meta","payload":{"id":"abc123","cwd":"/home/user","cli_version":"0.104.0","model_provider":"openai"}}"#;
+        let line = r#"{"timestamp":"2026-03-04T11:38:17.368Z","type":"session_meta","payload":{"id":"abc123","timestamp":"2026-03-04T11:37:55.863Z","cwd":"/home/user","cli_version":"0.104.0","model_provider":"openai"}}"#;
         let event = parse_codex_line(line).unwrap();
         match event {
-            CodexEvent::SessionMeta { id, cwd, cli_version, .. } => {
+            CodexEvent::SessionMeta { id, cwd, cli_version, timestamp, .. } => {
                 assert_eq!(id, "abc123");
                 assert_eq!(cwd.as_deref(), Some("/home/user"));
                 assert_eq!(cli_version.as_deref(), Some("0.104.0"));
+                // Should prefer payload.timestamp over outer timestamp
+                assert!(timestamp.is_some());
             }
             _ => panic!("Expected SessionMeta"),
         }
     }
 
     #[test]
-    fn test_parse_codex_token_count() {
-        let line = r#"{"timestamp":"t","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10259,"cached_input_tokens":4096,"output_tokens":836,"reasoning_output_tokens":622,"total_tokens":11095},"model_context_window":258400},"rate_limits":{}}}"#;
+    fn test_parse_iso8601() {
+        let ts = parse_iso8601_to_epoch_secs("2026-03-04T11:37:55.863Z");
+        assert!(ts.is_some());
+        let epoch = ts.unwrap();
+        // 2026-03-04 ~= roughly 1772xxx seconds since epoch
+        assert!(epoch > 1_700_000_000.0);
+        assert!(epoch < 1_800_000_000.0);
+    }
+
+    #[test]
+    fn test_parse_iso8601_fallback_to_outer() {
+        // No payload.timestamp, should use outer timestamp
+        let line = r#"{"timestamp":"2026-03-04T11:38:17.368Z","type":"session_meta","payload":{"id":"abc123","cwd":"/home/user"}}"#;
         let event = parse_codex_line(line).unwrap();
         match event {
-            CodexEvent::TokenCount { input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens, model_context_window } => {
+            CodexEvent::SessionMeta { timestamp, .. } => {
+                assert!(timestamp.is_some());
+            }
+            _ => panic!("Expected SessionMeta"),
+        }
+    }
+
+    #[test]
+    fn test_parse_codex_token_count_prefers_last() {
+        // last_token_usage (current turn) differs from total_token_usage (cumulative);
+        // parser must prefer last_token_usage because it's comparable to model_context_window.
+        let line = r#"{"timestamp":"t","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":50000,"cached_input_tokens":20000,"output_tokens":5000,"reasoning_output_tokens":3000,"total_tokens":55000},"last_token_usage":{"input_tokens":10259,"cached_input_tokens":4096,"output_tokens":836,"reasoning_output_tokens":622,"total_tokens":11095},"model_context_window":258400},"rate_limits":{}}}"#;
+        let event = parse_codex_line(line).unwrap();
+        match event {
+            CodexEvent::TokenCount { input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens, total_tokens, model_context_window } => {
                 assert_eq!(input_tokens, Some(10259));
                 assert_eq!(cached_input_tokens, Some(4096));
                 assert_eq!(output_tokens, Some(836));
                 assert_eq!(reasoning_output_tokens, Some(622));
+                assert_eq!(total_tokens, Some(11095));
+                assert_eq!(model_context_window, Some(258400));
+            }
+            _ => panic!("Expected TokenCount"),
+        }
+    }
+
+    #[test]
+    fn test_parse_codex_token_count_fallback_to_total() {
+        // When last_token_usage is absent, fall back to total_token_usage (old logs).
+        let line = r#"{"timestamp":"t","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10259,"cached_input_tokens":4096,"output_tokens":836,"reasoning_output_tokens":622,"total_tokens":11095},"model_context_window":258400},"rate_limits":{}}}"#;
+        let event = parse_codex_line(line).unwrap();
+        match event {
+            CodexEvent::TokenCount { input_tokens, total_tokens, model_context_window, .. } => {
+                assert_eq!(input_tokens, Some(10259));
+                assert_eq!(total_tokens, Some(11095));
                 assert_eq!(model_context_window, Some(258400));
             }
             _ => panic!("Expected TokenCount"),
@@ -330,6 +446,7 @@ mod tests {
             cwd: Some("/project".to_string()),
             cli_version: Some("0.104.0".to_string()),
             model_provider: Some("openai".to_string()),
+            timestamp: Some(1_709_550_000.0),
         });
 
         session.apply_event(&CodexEvent::TurnContext {
@@ -344,6 +461,7 @@ mod tests {
             cached_input_tokens: Some(4096),
             output_tokens: Some(836),
             reasoning_output_tokens: Some(622),
+            total_tokens: Some(11095),
             model_context_window: Some(258400),
         });
 
@@ -356,10 +474,29 @@ mod tests {
         assert_eq!(data.turn, Some(1));
 
         let usage = data.token_usage.unwrap();
-        assert_eq!(usage.used, Some(10259 + 836 + 622));
+        // used should equal total_tokens (11095), not input + output + reasoning (11717)
+        assert_eq!(usage.used, Some(11095));
         assert_eq!(usage.total, Some(258400));
         assert_eq!(usage.input, Some(10259));
         assert_eq!(usage.cached, Some(4096));
         assert_eq!(usage.reasoning, Some(622));
+    }
+
+    #[test]
+    fn test_codex_session_fallback_no_total_tokens() {
+        // When total_tokens is absent, fallback = input + output (NOT +reasoning, since reasoning ⊂ output)
+        let mut session = CodexSession::new();
+        session.apply_event(&CodexEvent::TokenCount {
+            input_tokens: Some(10259),
+            cached_input_tokens: Some(4096),
+            output_tokens: Some(836),
+            reasoning_output_tokens: Some(622),
+            total_tokens: None,
+            model_context_window: Some(258400),
+        });
+        let data = session.to_session_data();
+        let usage = data.token_usage.unwrap();
+        // input(10259) + output(836) = 11095, NOT +reasoning(622)
+        assert_eq!(usage.used, Some(10259 + 836));
     }
 }

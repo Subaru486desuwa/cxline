@@ -76,8 +76,9 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config, title_mode: 
     );
     let mods = modules::create_modules_from_config(
         &config.modules,
-        config.tokens_config.show_bar.unwrap_or(true),
+        config.tokens_config.show_bar.unwrap_or(false),
         config.tokens_config.bar_width.unwrap_or(10),
+        config.tokens_config.show_detail.unwrap_or(false),
         config.cost_config.currency.as_deref().unwrap_or("USD"),
     );
 
@@ -175,8 +176,9 @@ pub fn show_session(path: Option<PathBuf>, config: config::Config) -> io::Result
     );
     let mods = modules::create_modules_from_config(
         &config.modules,
-        config.tokens_config.show_bar.unwrap_or(true),
+        config.tokens_config.show_bar.unwrap_or(false),
         config.tokens_config.bar_width.unwrap_or(10),
+        config.tokens_config.show_detail.unwrap_or(false),
         config.cost_config.currency.as_deref().unwrap_or("USD"),
     );
 

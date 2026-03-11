@@ -7,6 +7,7 @@ use std::path::PathBuf;
 pub struct ModuleTokensConfig {
     pub show_bar: Option<bool>,
     pub bar_width: Option<usize>,
+    pub show_detail: Option<bool>,
 }
 
 #[derive(Debug, Default)]
@@ -34,6 +35,7 @@ impl Default for Config {
                 "tokens".to_string(),
                 "cost".to_string(),
                 "timer".to_string(),
+                "cwd".to_string(),
                 "git".to_string(),
                 "permission".to_string(),
             ],
@@ -108,6 +110,7 @@ impl Config {
             Some(ModuleTokensConfig {
                 show_bar: t.get("show_bar").and_then(|v| v.as_bool()),
                 bar_width: t.get("bar_width").and_then(|v| v.as_integer()).map(|v| v as usize),
+                show_detail: t.get("show_detail").and_then(|v| v.as_bool()),
             })
         }).unwrap_or_default();
 
@@ -154,7 +157,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.theme_name, "default");
-        assert_eq!(config.modules.len(), 6);
+        assert_eq!(config.modules.len(), 7);
     }
 
     #[test]

@@ -163,11 +163,13 @@ fn test_show_with_module_filter() {
 
 #[test]
 fn test_tokens_with_codex_details() {
-    // Test via stdin with the new fields
+    // Default: show_bar=false, show_detail=false → percentage only
     let input = r#"{"model":"gpt-5","token_usage":{"used":11095,"total":258400,"input":10259,"output":836,"cached":4096,"reasoning":622}}"#;
     let result = run_cxline(input, &["-m", "tokens"]);
     assert!(result.contains("11.1k"));
     assert!(result.contains("258.4k"));
-    assert!(result.contains("in"));
-    assert!(result.contains("out"));
+    assert!(result.contains("%"));
+    // Default should NOT show detail breakdown
+    assert!(!result.contains("in:"));
+    assert!(!result.contains("out:"));
 }

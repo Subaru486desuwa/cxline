@@ -6,13 +6,15 @@ use crate::theme::Theme;
 pub struct TokensModule {
     pub show_bar: bool,
     pub bar_width: usize,
+    pub show_detail: bool,
 }
 
 impl Default for TokensModule {
     fn default() -> Self {
         Self {
-            show_bar: true,
+            show_bar: false,
             bar_width: 10,
+            show_detail: false,
         }
     }
 }
@@ -36,50 +38,70 @@ impl Module for TokensModule {
         let usage = data.token_usage.as_ref()?;
         let used = usage.used?;
 
-        let mut parts = vec![format!("{}{}", theme.icons.tokens, format_count(used))];
+        let (ratio, pct_str, pct_color) = if let Some(total) = usage.total {
+            let r = if total > 0 { (used as f64 / total as f64).min(1.0) } else { 0.0 };
+            let pct = r * 100.0;
+            let pct_str = if pct < 10.0 {
+                format!("{:.1}%", pct)
+            } else {
+                format!("{:.0}%", pct)
+            };
+            let color = if r > 0.9 {
+                &theme.colors.error
+            } else if r > 0.7 {
+                &theme.colors.warning
+            } else {
+                &theme.colors.accent
+            };
+            (Some(r), Some(pct_str), Some(color))
+        } else {
+            (None, None, None)
+        };
 
-        if let Some(total) = usage.total {
-            parts[0] = format!("{}{}/{}", theme.icons.tokens, format_count(used), format_count(total));
+        // Base: icon used/total
+        let base = if let Some(total) = usage.total {
+            format!("{}{}/{}", theme.icons.tokens, format_count(used), format_count(total))
+        } else {
+            format!("{}{}", theme.icons.tokens, format_count(used))
+        };
 
-            if self.show_bar {
-                let ratio = if total > 0 {
-                    (used as f64 / total as f64).min(1.0)
-                } else {
-                    0.0
-                };
-                let bar_color = if ratio > 0.9 {
-                    &theme.colors.error
-                } else if ratio > 0.7 {
-                    &theme.colors.warning
-                } else {
-                    &theme.colors.accent
-                };
-                let bar = progress_bar(ratio, self.bar_width);
-                parts.push(apply_color(&bar, bar_color));
+        let mut parts = vec![base];
+
+        // Bar mode (optional, off by default)
+        if self.show_bar {
+            if let (Some(r), Some(color)) = (ratio, pct_color) {
+                let bar = progress_bar(r, self.bar_width);
+                parts.push(apply_color(&bar, color));
             }
         }
 
-        // Append detailed breakdown if available (Codex token categories)
-        let mut details = Vec::new();
-        if let Some(input) = usage.input {
-            let mut s = format!("{}in", format_count(input));
+        // Percentage
+        if let (Some(pct), Some(color)) = (&pct_str, pct_color) {
+            parts.push(apply_color(pct, color));
+        }
+
+        // Detail breakdown (optional, off by default)
+        if self.show_detail {
+            let mut details = Vec::new();
+            if let Some(input) = usage.input {
+                details.push(format!("in:{}", format_count(input)));
+            }
+            if let Some(output) = usage.output {
+                details.push(format!("out:{}", format_count(output)));
+            }
             if let Some(cached) = usage.cached {
                 if cached > 0 {
-                    s.push_str(&format!(" ({}cached)", format_count(cached)));
+                    details.push(format!("cache:{}", format_count(cached)));
                 }
             }
-            details.push(s);
-        }
-        if let Some(output) = usage.output {
-            details.push(format!("{}out", format_count(output)));
-        }
-        if let Some(reasoning) = usage.reasoning {
-            if reasoning > 0 {
-                details.push(format!("{}reason", format_count(reasoning)));
+            if let Some(reasoning) = usage.reasoning {
+                if reasoning > 0 {
+                    details.push(format!("reason:{}", format_count(reasoning)));
+                }
             }
-        }
-        if !details.is_empty() {
-            parts.push(details.join(" "));
+            if !details.is_empty() {
+                parts.push(details.join(" "));
+            }
         }
 
         Some(apply_color(&parts.join(" "), &theme.colors.secondary))

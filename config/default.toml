@@ -8,12 +8,13 @@ theme = "default"
 separator = " │ "
 
 # Enabled modules (in display order)
-modules = ["model", "tokens", "turns", "cost", "timer", "git", "permission"]
+modules = ["model", "tokens", "turns", "cost", "timer", "cwd", "git", "permission"]
 
 # Token display settings
 [tokens]
-show_bar = true
-bar_width = 10
+show_bar = false
+show_detail = false
+# bar_width = 10
 
 # Cost display settings
 [cost]

@@ -5,6 +5,7 @@ pub mod timer;
 pub mod git;
 pub mod permission;
 pub mod turns;
+pub mod cwd;
 
 use crate::parser::SessionData;
 use crate::theme::Theme;
@@ -26,6 +27,7 @@ pub fn create_module(name: &str) -> Option<Box<dyn Module>> {
         "git" => Some(Box::new(git::GitModule)),
         "permission" => Some(Box::new(permission::PermissionModule)),
         "turns" => Some(Box::new(turns::TurnsModule)),
+        "cwd" => Some(Box::new(cwd::CwdModule)),
         _ => None,
     }
 }
@@ -35,6 +37,7 @@ pub fn create_modules_from_config(
     names: &[String],
     tokens_show_bar: bool,
     tokens_bar_width: usize,
+    tokens_show_detail: bool,
     cost_currency: &str,
 ) -> Vec<Box<dyn Module>> {
     names
@@ -44,6 +47,7 @@ pub fn create_modules_from_config(
                 "tokens" => Some(Box::new(tokens::TokensModule {
                     show_bar: tokens_show_bar,
                     bar_width: tokens_bar_width,
+                    show_detail: tokens_show_detail,
                 }) as Box<dyn Module>),
                 "cost" => Some(Box::new(cost::CostModule {
                     currency: cost_currency.to_string(),

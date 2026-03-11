@@ -91,8 +91,9 @@ fn run_stdin_mode(config: config::Config) {
     );
     let mods = modules::create_modules_from_config(
         &config.modules,
-        config.tokens_config.show_bar.unwrap_or(true),
+        config.tokens_config.show_bar.unwrap_or(false),
         config.tokens_config.bar_width.unwrap_or(10),
+        config.tokens_config.show_detail.unwrap_or(false),
         config.cost_config.currency.as_deref().unwrap_or("USD"),
     );
     let width = terminal_size::terminal_size()
@@ -427,7 +428,7 @@ OPTIONS:
     -V, --version              Show version
 
 MODULES:
-    model, tokens, cost, timer, git, permission, turns
+    model, tokens, cost, timer, cwd, git, permission, turns
 
 EXAMPLES:
     cxline setup                          # One-click setup, then just use 'codex'

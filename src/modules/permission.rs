@@ -31,11 +31,11 @@ impl Module for PermissionModule {
                 (ic, &theme.colors.accent)
             }
             _ => {
-                // on-request and others → locked
+                // on-request and others
                 let ic = match theme.name.as_str() {
                     "minimal" => "",
                     "powerline" => "\u{f023} ",  // nf-fa-lock
-                    _ => "\u{1f512} ",            // 🔒
+                    _ => "\u{26a1} ",             // ⚡
                 };
                 (ic, &theme.colors.warning)
             }
