@@ -244,12 +244,12 @@ fn run_setup_unix() {
         r#"{marker}
 set -g status on
 set -g status-style 'bg=default,fg=white'
-set -g status-left ''
-set -g status-left-length 0
+set -g status-left-length 120
+set -g status-left '{status_right}'
 set -g window-status-format ''
 set -g window-status-current-format ''
-set -g status-right-length 120
-set -g status-right '{status_right}'
+set -g status-right ''
+set -g status-right-length 0
 set -g status-interval 2
 set -g status-position bottom
 {marker}-end"#,
