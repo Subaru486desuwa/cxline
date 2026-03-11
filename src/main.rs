@@ -15,6 +15,7 @@ fn main() {
     let mut modules_arg = None;
     let mut subcommand = None;
     let mut session_path = None;
+    let mut title_mode = false;
     let mut i = 1;
 
     while i < args.len() {
@@ -44,6 +45,9 @@ fn main() {
                 print_help();
                 return;
             }
+            "--title" => {
+                title_mode = true;
+            }
             "--version" | "-V" => {
                 println!("cxline {}", env!("CARGO_PKG_VERSION"));
                 return;
@@ -58,7 +62,7 @@ fn main() {
 
     match subcommand.as_deref() {
         Some("watch") => {
-            if let Err(e) = watcher::watch_session(session_path, config) {
+            if let Err(e) = watcher::watch_session(session_path, config, title_mode) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -111,6 +115,115 @@ fn run_stdin_mode(config: config::Config) {
 }
 
 fn run_setup() {
+    if cfg!(windows) {
+        run_setup_windows();
+    } else {
+        run_setup_unix();
+    }
+}
+
+#[cfg(windows)]
+fn run_setup_windows() {
+    let cxline_path = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "cxline".to_string());
+
+    let home = dirs::home_dir().expect("Cannot determine home directory");
+    let mut changes: Vec<String> = Vec::new();
+
+    // --- Write PowerShell profile ---
+    // PowerShell profile path: ~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1
+    let ps_dir = home.join("Documents").join("PowerShell");
+    let profile_path = ps_dir.join("Microsoft.PowerShell_profile.ps1");
+
+    let func_marker = "# cxline-codex-wrapper";
+    let func_marker_end = "# cxline-codex-wrapper-end";
+    let func_block = format!(
+        r#"{marker}
+function codex {{
+    $cxlineArgs = @("watch", "--title")
+    $cxlineProc = Start-Process -FilePath "{cxline}" -ArgumentList $cxlineArgs -NoNewWindow -PassThru
+    try {{
+        & codex.exe @args
+    }} finally {{
+        if (!$cxlineProc.HasExited) {{
+            Stop-Process -Id $cxlineProc.Id -Force -ErrorAction SilentlyContinue
+        }}
+        # Clear terminal title
+        Write-Host "`e]0;`a" -NoNewline
+    }}
+}}
+{marker_end}"#,
+        marker = func_marker,
+        marker_end = func_marker_end,
+        cxline = cxline_path,
+    );
+
+    if !ps_dir.exists() {
+        std::fs::create_dir_all(&ps_dir).expect("Failed to create PowerShell profile directory");
+    }
+
+    if profile_path.exists() {
+        let content = std::fs::read_to_string(&profile_path).unwrap_or_default();
+        if content.contains(func_marker) {
+            let mut new_content = String::new();
+            let mut skipping = false;
+            for line in content.lines() {
+                if line.trim() == func_marker {
+                    skipping = true;
+                    continue;
+                }
+                if line.trim() == func_marker_end {
+                    skipping = false;
+                    continue;
+                }
+                if !skipping {
+                    new_content.push_str(line);
+                    new_content.push('\n');
+                }
+            }
+            new_content.push_str(&func_block);
+            new_content.push('\n');
+            std::fs::write(&profile_path, new_content)
+                .expect("Failed to write PowerShell profile");
+            changes.push("PowerShell profile (updated codex wrapper)".into());
+        } else {
+            let mut content = content;
+            if !content.ends_with('\n') {
+                content.push('\n');
+            }
+            content.push('\n');
+            content.push_str(&func_block);
+            content.push('\n');
+            std::fs::write(&profile_path, content)
+                .expect("Failed to write PowerShell profile");
+            changes.push("PowerShell profile (added codex wrapper)".into());
+        }
+    } else {
+        std::fs::write(&profile_path, format!("{}\n", func_block))
+            .expect("Failed to create PowerShell profile");
+        changes.push("PowerShell profile (created with codex wrapper)".into());
+    }
+
+    // --- Output ---
+    println!("cxline setup complete! (Windows)");
+    println!();
+    for c in &changes {
+        println!("  [+] {}", c);
+    }
+    println!();
+    println!("  Profile: {}", profile_path.display());
+    println!();
+    println!("Usage: restart PowerShell, then type 'codex' - status appears in title bar.");
+}
+
+#[cfg(not(windows))]
+fn run_setup_windows() {
+    eprintln!("Windows setup is only available on Windows.");
+    std::process::exit(1);
+}
+
+fn run_setup_unix() {
     let cxline_path = std::env::current_exe()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "cxline".to_string());
@@ -309,6 +422,7 @@ OPTIONS:
     -t, --theme <THEME>        Theme: default, minimal, powerline
     -m, --modules <MODULES>    Comma-separated module list
     -s, --session <PATH>       Path to a specific .jsonl session file
+        --title                Output status to terminal title bar (for Windows)
     -h, --help                 Show this help
     -V, --version              Show version
 

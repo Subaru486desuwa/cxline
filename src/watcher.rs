@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, BufRead, Seek, SeekFrom};
+use std::io::{self, BufRead, Seek};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -10,6 +10,7 @@ use crate::config;
 use crate::formatter;
 use crate::modules;
 use crate::parser::{self, CodexSession};
+use crate::style;
 use crate::theme;
 
 /// Find the most recent rollout JSONL file under ~/.codex/sessions/
@@ -52,7 +53,7 @@ fn find_newest_jsonl(dir: &std::path::Path) -> Option<PathBuf> {
 }
 
 /// Watch a JSONL file and render status on each change
-pub fn watch_session(path: Option<PathBuf>, config: config::Config) -> io::Result<()> {
+pub fn watch_session(path: Option<PathBuf>, config: config::Config, title_mode: bool) -> io::Result<()> {
     let file_path = match path {
         Some(p) => p,
         None => find_latest_rollout().ok_or_else(|| {
@@ -94,10 +95,10 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config) -> io::Resul
     }
 
     // Render initial state
-    render_status(&session, &mods, &theme);
+    render_status(&session, &mods, &theme, title_mode);
 
     // Remember current file position
-    let mut pos = file.seek(SeekFrom::Current(0))?;
+    let mut pos = file.stream_position()?;
 
     // Set up file watcher
     let (tx, rx) = mpsc::channel();
@@ -108,13 +109,13 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config) -> io::Resul
             }
         }
     })
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    .map_err(io::Error::other)?;
 
     // Watch the parent directory (some editors write temp files then rename)
     let watch_dir = file_path.parent().unwrap_or(std::path::Path::new("."));
     watcher
         .watch(watch_dir, RecursiveMode::NonRecursive)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // Event loop
     loop {
@@ -134,7 +135,7 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config) -> io::Resul
             session = CodexSession::new();
         }
 
-        file.seek(SeekFrom::Start(pos))?;
+        file.seek(std::io::SeekFrom::Start(pos))?;
         reader = io::BufReader::new(&file);
         let mut changed = false;
 
@@ -153,7 +154,7 @@ pub fn watch_session(path: Option<PathBuf>, config: config::Config) -> io::Resul
         pos = file_len;
 
         if changed {
-            render_status(&session, &mods, &theme);
+            render_status(&session, &mods, &theme, title_mode);
         }
     }
 }
@@ -217,6 +218,7 @@ fn render_status(
     session: &CodexSession,
     mods: &[Box<dyn modules::Module>],
     theme: &theme::Theme,
+    title_mode: bool,
 ) {
     let data = session.to_session_data();
     let width = terminal_size::terminal_size()
@@ -224,10 +226,18 @@ fn render_status(
         .unwrap_or(80);
     let output = formatter::format_statusline(mods, &data, theme, width);
 
-    // Clear line and redraw
-    eprint!("\x1b[2K\r");
-    if !output.is_empty() {
-        print!("{}", output);
+    if title_mode {
+        // Write to terminal title bar using OSC escape sequence
+        let plain = style::strip_ansi(&output);
+        if !plain.is_empty() {
+            print!("\x1b]0;{}\x07", plain);
+        }
+    } else {
+        // Clear line and redraw
+        eprint!("\x1b[2K\r");
+        if !output.is_empty() {
+            print!("{}", output);
+        }
     }
     // Flush stdout
     use std::io::Write;

@@ -28,6 +28,25 @@ pub fn progress_bar(ratio: f64, width: usize) -> String {
     format!("{}{}", "█".repeat(filled), "░".repeat(empty))
 }
 
+/// Strip all ANSI escape sequences, returning plain visible text.
+/// Used by title mode since terminal title bars don't render ANSI colors.
+pub fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut in_escape = false;
+    for c in s.chars() {
+        if in_escape {
+            if c.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+        } else if c == '\x1b' {
+            in_escape = true;
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// Strip ANSI escape codes to get the visible character count
 pub fn visible_len(s: &str) -> usize {
     let mut len = 0;
