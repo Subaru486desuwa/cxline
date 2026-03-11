@@ -7,7 +7,7 @@ A lightweight, blazing-fast session monitor for [OpenAI Codex CLI](https://githu
 After install, just type `codex` as usual — a real-time status bar auto-appears at the bottom of your terminal.
 
 ```
-🤖 gpt-5.3-codex │ 📊 11.1k/258.4k ░░░░░░░░░░ 10.3kin (4.1kcached) 836out 622reason │ 🔄 Turn 3 │ ⏱️  2m15s │ 🔒 on-request
+🤖 gpt-5.3-codex │ 📊 11.1k/258.4k 4.3% │ 🔄 Turn 3 │ ⏱️  2m15s │ 📂 ~/project │ ⚡ on-request
 ```
 
 ## Platform Support
@@ -65,7 +65,7 @@ tmux status bar calls "cxline show" every 2s
     ↓
 cxline reads ~/.codex/sessions/*.jsonl
     ↓
-Renders: model │ tokens │ turns │ timer │ permission
+Renders: model │ tokens │ turns │ timer │ cwd │ permission
 ```
 
 **Windows (title mode):**
@@ -87,13 +87,13 @@ When codex exits, background process is cleaned up
 | Module | Example | Description |
 |--------|---------|-------------|
 | `model` | `🤖 gpt-5.3-codex` | Current model name |
-| `tokens` | `📊 11.1k/258.4k` | Token usage + context progress bar |
-| | `10.3kin (4.1kcached) 836out 622reason` | Detailed breakdown |
+| `tokens` | `📊 11.1k/258.4k 4.3%` | Token usage / context window + percentage |
 | `turns` | `🔄 Turn 3` | Current turn number |
 | `cost` | `💰 $0.42` | Session cost (if available) |
 | `timer` | `⏱️  2m15s` | Session elapsed time |
+| `cwd` | `📂 ~/project` | Current working directory |
 | `git` | `🌿 main` | Git branch |
-| `permission` | `🔒 on-request` | Approval policy |
+| `permission` | `⚡ on-request` | Approval policy |
 
 ## Commands
 
@@ -113,11 +113,12 @@ echo '{"model":"o3"}' | cxline          # Legacy stdin pipe mode
 ```toml
 theme = "default"           # default / minimal / powerline
 separator = " │ "
-modules = ["model", "tokens", "turns", "cost", "timer", "git", "permission"]
+modules = ["model", "tokens", "turns", "cost", "timer", "cwd", "git", "permission"]
 
 [tokens]
-show_bar = true
-bar_width = 10
+show_bar = false            # optional progress bar
+show_detail = false         # optional in/out/cache/reason breakdown
+# bar_width = 10
 
 [cost]
 currency = "USD"            # USD / CNY

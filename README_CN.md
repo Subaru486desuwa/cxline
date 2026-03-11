@@ -2,10 +2,10 @@
 
 轻量级 [OpenAI Codex CLI](https://github.com/openai/codex) 会话监控工具。
 
-安装后，输入 `codex` 即自动在终端底部显示实时状态栏 —— 模型、Token 用量、轮次、耗时、权限，全部自动刷新。
+安装后，输入 `codex` 即自动在终端底部显示实时状态栏 —— 模型、Token 用量、轮次、耗时、工作目录、权限，全部自动刷新。
 
 ```
-🤖 gpt-5.3-codex │ 📊 11.1k/258.4k ░░░░░░░░░░ 10.3kin (4.1kcached) 836out 622reason │ 🔄 Turn 3 │ ⏱️  2m15s │ 🔒 on-request
+🤖 gpt-5.3-codex │ 📊 11.1k/258.4k 4.3% │ 🔄 Turn 3 │ ⏱️  2m15s │ 📂 ~/project │ ⚡ on-request
 ```
 
 ## 平台支持
@@ -63,7 +63,7 @@ tmux 底部状态栏每 2 秒调用 cxline show
     ↓
 cxline 读取 ~/.codex/sessions/ 下最新的 JSONL 日志
     ↓
-解析并渲染：模型 │ Token │ 轮次 │ 耗时 │ 权限
+解析并渲染：模型 │ Token │ 轮次 │ 耗时 │ 目录 │ 权限
 ```
 
 **Windows（标题栏模式）：**
@@ -85,13 +85,13 @@ codex 退出时自动清理后台进程
 | 模块 | 示例 | 说明 |
 |------|------|------|
 | `model` | `🤖 gpt-5.3-codex` | 当前模型 |
-| `tokens` | `📊 11.1k/258.4k` | Token 使用量 / 上下文窗口 |
-| | `10.3kin (4.1kcached) 836out 622reason` | 输入/缓存/输出/推理明细 |
+| `tokens` | `📊 11.1k/258.4k 4.3%` | Token 使用量 / 上下文窗口 + 百分比 |
 | `turns` | `🔄 Turn 3` | 当前对话轮次 |
 | `cost` | `💰 $0.42` | 会话费用（如有） |
 | `timer` | `⏱️  2m15s` | 会话耗时 |
+| `cwd` | `📂 ~/project` | 当前工作目录 |
 | `git` | `🌿 main` | Git 分支 |
-| `permission` | `🔒 on-request` | 审批策略 |
+| `permission` | `⚡ on-request` | 审批策略 |
 
 ## 命令一览
 
@@ -111,11 +111,12 @@ echo '{"model":"o3"}' | cxline          # 管道输入模式（兼容旧版）
 ```toml
 theme = "default"           # default / minimal / powerline
 separator = " │ "
-modules = ["model", "tokens", "turns", "cost", "timer", "git", "permission"]
+modules = ["model", "tokens", "turns", "cost", "timer", "cwd", "git", "permission"]
 
 [tokens]
-show_bar = true
-bar_width = 10
+show_bar = false            # 可选进度条
+show_detail = false         # 可选 in/out/cache/reason 明细
+# bar_width = 10
 
 [cost]
 currency = "CNY"            # USD / CNY
